@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sprite Sheet Animator & Drawing Studio</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #1e1e2e;
+            --panel-bg: #2b2b3b;
+            --card-bg: #181825;
+            --accent-color: #89b4fa;
+            --accent-hover: #74c7ec;
+            --success-color: #a6e3a1;
+            --text-color: #cdd6f4;
+            --border-color: #45475a;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            margin: 0;
+            color: var(--accent-color);
+            font-size: 1.8rem;
+        }
+
+        .top-bar {
+            background: var(--panel-bg);
+            padding: 15px;
+            border-radius: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+
+        .file-inputs, .anim-controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            background-color: var(--accent-color);
+            color: #11111b;
+            border: none;
+            padding: 8px 14px;
+            cursor: pointer;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 13px;
+            transition: 0.2s;
+        }
+
+        .btn:hover { background-color: var(--accent-hover); }
+        .btn:disabled { background-color: #45475a; cursor: not-allowed; }
+
+        .btn-generate {
+            background-color: #a6e3a1 !important;
+            color: #11111b !important;
+            box-shadow: 0 0 10px rgba(166, 227, 161, 0.4);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.03); }
+            100% { transform: scale(1); }
+        }
+
+        select, input[type="number"], input[type="range"] {
+            background: #181825;
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            padding: 6px 10px;
+            border-radius: 5px;
+            outline: none;
+        }
+
+        .workspace {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 20px;
+            min-height: 520px;
+        }
+
+        @media (max-width: 900px) {
+            .workspace { grid-template-columns: 1fr; }
+        }
+
+        .canvas-section {
+            background: var(--panel-bg);
+            border-radius: 10px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            position: relative;
+        }
+
+        .drawing-toolbar {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            background: var(--card-bg);
+            padding: 8px 15px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            width: 100%;
+            box-sizing: border-box;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .canvas-container {
+            flex: 1;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: auto;
+            position: relative;
+            background-image: linear-gradient(45deg, #313244 25%, transparent 25%), 
+                              linear-gradient(-45deg, #313244 25%, transparent 25%), 
+                              linear-gradient(45deg, transparent 75%, #313244 75%), 
+                              linear-gradient(-45deg, transparent 75%, #313244 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            min-height: 380px;
+        }
+
+        canvas {
+            border-radius: 4px;
+            cursor: crosshair;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .sidebar {
+            background: var(--panel-bg);
+            border-radius: 10px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-height: 600px;
+        }
+
+        .sidebar h3 {
+            margin: 0;
+            color: var(--accent-color);
+            font-size: 1rem;
+        }
+
+        .frame-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+
+        .frame-item {
+            background: var(--card-bg);
+            border: 2px solid var(--border-color);
+            border-radius: 6px;
+            padding: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .frame-item:hover, .frame-item.active {
+            border-color: var(--accent-color);
+            background: #232435;
+        }
+
+        .frame-thumb {
+            width: 45px;
+            height: 45px;
+            object-fit: contain;
+            background: #313244;
+            border-radius: 4px;
+        }
+
+        .frame-info {
+            font-size: 11px;
+            word-break: break-all;
+            font-family: monospace;
+            flex: 1;
+        }
+
+        .frame-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .btn-sm {
+            padding: 4px 8px;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Sprite Sheet Animator & Editor Studio</h1>
+
+    <div class="top-bar">
+        <div class="file-inputs">
+            <label><strong>PNG:</strong> <input type="file" id="imageInput" accept="image/png" /></label>
+            <label><strong>XML:</strong> <input type="file" id="xmlInput" accept=".xml" /></label>
+        </div>
+
+        <div class="anim-controls">
+            <label>Animation: 
+                <select id="animSelect" disabled><option>Load files first</option></select>
+            </label>
+            <button id="playBtn" class="btn" disabled>Play</button>
+            <label>FPS: <input type="number" id="fpsInput" value="24" min="1" max="60" style="width: 50px;" /></label>
+            <button id="generateBtn" class="btn btn-generate" style="display: none;">Export New Sheet & XML 🚀</button>
+            <button id="downloadZipBtn" class="btn" disabled>ZIP Frames</button>
+        </div>
+    </div>
+
+    <div class="workspace">
+        <div class="canvas-section">
+            <div class="drawing-toolbar">
+                <label>Tool: 
+                    <select id="toolSelect">
+                        <option value="brush">Brush 🖌️</option>
+                        <option value="eraser">Eraser 🧹</option>
+                    </select>
+                </label>
+                <label>Color: <input type="color" id="colorPicker" value="#a6e3a1" /></label>
+                <label>Size: <input type="range" id="sizePicker" min="1" max="50" value="5" /></label>
+                <button id="clearFrameBtn" class="btn" style="background:#f38ba8; color:#11111b;">Clear Frame</button>
+            </div>
+
+            <div class="canvas-container">
+                <canvas id="editorCanvas"></canvas>
+            </div>
+        </div>
+
+        <div class="sidebar">
+            <h3>Animation Frames</h3>
+            <div class="frame-list" id="frameList"></div>
+        </div>
+    </div>
+
+    <!-- Hidden file input for frame replacement -->
+    <input type="file" id="replaceFileInput" accept="image/png" style="display: none;" />
+
+    <script>
+        let spriteImage = new Image();
+        let xmlText = "";
+        let originalImageName = "spritesheet";
+        let animationGroups = {}; // { animName: [frameObjects] }
+        let allFramesList = []; // Flattened list of all frames to maintain order
+        let currentAnimName = "";
+        let currentFrameIndex = 0;
+        let replaceFrameTarget = null;
+        
+        let isPlaying = false;
+        let animTimer = null;
+
+        // Drawing state
+        let isDrawing = false;
+        let lastX = 0, lastY = 0;
+
+        const imageInput = document.getElementById('imageInput');
+        const xmlInput = document.getElementById('xmlInput');
+        const animSelect = document.getElementById('animSelect');
+        const playBtn = document.getElementById('playBtn');
+        const fpsInput = document.getElementById('fpsInput');
+        const frameList = document.getElementById('frameList');
+        const downloadZipBtn = document.getElementById('downloadZipBtn');
+        const generateBtn = document.getElementById('generateBtn');
+        const replaceFileInput = document.getElementById('replaceFileInput');
+
+        const canvas = document.getElementById('editorCanvas');
+        const ctx = canvas.getContext('2d');
+        const toolSelect = document.getElementById('toolSelect');
+        const colorPicker = document.getElementById('colorPicker');
+        const sizePicker = document.getElementById('sizePicker');
+        const clearFrameBtn = document.getElementById('clearFrameBtn');
+
+        // Check file load triggers
+        imageInput.addEventListener('change', (e) => loadFile(e.target.files[0], 'image'));
+        xmlInput.addEventListener('change', (e) => loadFile(e.target.files[0], 'xml'));
+
+        function loadFile(file, type) {
+            if (!file) return;
+            const reader = new FileReader();
+            if (type === 'image') {
+                originalImageName = file.name.replace(/\.[^/.]+$/, "");
+                reader.onload = (ev) => {
+                    spriteImage.onload = checkReady;
+                    spriteImage.src = ev.target.result;
+                };
+                reader.readAsDataURL(file);
+            } else {
+                reader.onload = (ev) => {
+                    xmlText = ev.target.result;
+                    checkReady();
+                };
+                reader.readAsText(file);
+            }
+        }
+
+        function checkReady() {
+            if (spriteImage.src && xmlText) {
+                parseSpriteData();
+            }
+        }
+
+        function parseSpriteData() {
+            animationGroups = {};
+            allFramesList = [];
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+            const subTextures = xmlDoc.getElementsByTagName("SubTexture");
+
+            for (let i = 0; i < subTextures.length; i++) {
+                const st = subTextures[i];
+                const rawName = st.getAttribute("name");
+                const x = parseInt(st.getAttribute("x")) || 0;
+                const y = parseInt(st.getAttribute("y")) || 0;
+                const w = parseInt(st.getAttribute("width")) || 0;
+                const h = parseInt(st.getAttribute("height")) || 0;
+
+                const frameX = Math.abs(parseInt(st.getAttribute("frameX")) || 0);
+                const frameY = Math.abs(parseInt(st.getAttribute("frameY")) || 0);
+                const frameW = parseInt(st.getAttribute("frameWidth")) || w;
+                const frameH = parseInt(st.getAttribute("frameHeight")) || h;
+
+                const frameCanvas = document.createElement("canvas");
+                frameCanvas.width = frameW;
+                frameCanvas.height = frameH;
+                const fCtx = frameCanvas.getContext("2d");
+
+                fCtx.drawImage(spriteImage, x, y, w, h, frameX, frameY, w, h);
+
+                const groupName = rawName.replace(/\d+$/, '') || rawName;
+
+                const frameObj = {
+                    rawName: rawName,
+                    canvas: frameCanvas,
+                    ctx: fCtx,
+                    w: frameW,
+                    h: frameH,
+                    frameX: frameX,
+                    frameY: frameY,
+                    cropW: w,
+                    cropH: h
+                };
+
+                if (!animationGroups[groupName]) {
+                    animationGroups[groupName] = [];
+                }
+
+                animationGroups[groupName].push(frameObj);
+                allFramesList.push(frameObj);
+            }
+
+            animSelect.innerHTML = "";
+            const keys = Object.keys(animationGroups);
+            keys.forEach(key => {
+                const opt = document.createElement('option');
+                opt.value = key;
+                opt.innerText = `${key} (${animationGroups[key].length} frames)`;
+                animSelect.appendChild(opt);
+            });
+
+            animSelect.disabled = false;
+            playBtn.disabled = false;
+            downloadZipBtn.disabled = false;
+
+            if (keys.length > 0) {
+                switchAnimation(keys[0]);
+            }
+        }
+
+        function switchAnimation(animName) {
+            currentAnimName = animName;
+            currentFrameIndex = 0;
+            buildFrameList();
+            loadActiveFrame();
+        }
+
+        function buildFrameList() {
+            frameList.innerHTML = "";
+            const frames = animationGroups[currentAnimName];
+            if (!frames) return;
+
+            frames.forEach((frameObj, index) => {
+                const item = document.createElement('div');
+                item.className = `frame-item ${index === currentFrameIndex ? 'active' : ''}`;
+                
+                const img = document.createElement('img');
+                img.className = 'frame-thumb';
+                img.src = frameObj.canvas.toDataURL();
+
+                const info = document.createElement('div');
+                info.className = 'frame-info';
+                info.innerText = `#${index + 1}\n${frameObj.rawName}`;
+
+                const actions = document.createElement('div');
+                actions.className = 'frame-actions';
+
+                const replaceBtn = document.createElement('button');
+                replaceBtn.className = 'btn btn-sm';
+                replaceBtn.innerText = 'Replace';
+                replaceBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    replaceFrameTarget = frameObj;
+                    replaceFileInput.click();
+                };
+
+                actions.appendChild(replaceBtn);
+
+                item.appendChild(img);
+                item.appendChild(info);
+                item.appendChild(actions);
+
+                item.onclick = () => {
+                    pauseAnimation();
+                    currentFrameIndex = index;
+                    updateActiveFrameUI();
+                };
+
+                frameList.appendChild(item);
+            });
+        }
+
+        // Handle replacing frame via external upload
+        replaceFileInput.onchange = (e) => {
+            const file = e.target.files[0];
+            if (!file || !replaceFrameTarget) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const newImg = new Image();
+                newImg.onload = () => {
+                    // Resize target canvas if replacing with a different size image
+                    replaceFrameTarget.canvas.width = newImg.width;
+                    replaceFrameTarget.canvas.height = newImg.height;
+                    replaceFrameTarget.w = newImg.width;
+                    replaceFrameTarget.h = newImg.height;
+                    replaceFrameTarget.cropW = newImg.width;
+                    replaceFrameTarget.cropH = newImg.height;
+                    replaceFrameTarget.frameX = 0;
+                    replaceFrameTarget.frameY = 0;
+
+                    replaceFrameTarget.ctx.clearRect(0, 0, newImg.width, newImg.height);
+                    replaceFrameTarget.ctx.drawImage(newImg, 0, 0);
+
+                    // Refresh UI
+                    buildFrameList();
+                    loadActiveFrame();
+                    triggerModifiedState();
+                };
+                newImg.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+            replaceFileInput.value = ""; // Reset
+        };
+
+        function triggerModifiedState() {
+            generateBtn.style.display = "block"; // Show the new sheet/XML button
+        }
+
+        function updateActiveFrameUI() {
+            const items = frameList.getElementsByClassName('frame-item');
+            for (let i = 0; i < items.length; i++) {
+                items[i].classList.toggle('active', i === currentFrameIndex);
+            }
+            loadActiveFrame();
+        }
+
+        function loadActiveFrame() {
+            const frame = animationGroups[currentAnimName]?.[currentFrameIndex];
+            if (!frame) return;
+
+            canvas.width = frame.w;
+            canvas.height = frame.h;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(frame.canvas, 0, 0);
+        }
+
+        function syncCanvasToFrame() {
+            const frame = animationGroups[currentAnimName]?.[currentFrameIndex];
+            if (!frame) return;
+
+            frame.ctx.clearRect(0, 0, frame.w, frame.h);
+            frame.ctx.drawImage(canvas, 0, 0);
+
+            const activeThumb = frameList.children[currentFrameIndex]?.querySelector('.frame-thumb');
+            if (activeThumb) {
+                activeThumb.src = canvas.toDataURL();
+            }
+
+            triggerModifiedState();
+        }
+
+        // Animation Controls
+        playBtn.onclick = () => {
+            if (isPlaying) pauseAnimation();
+            else startAnimation();
+        };
+
+        function startAnimation() {
+            if (!animationGroups[currentAnimName]) return;
+            isPlaying = true;
+            playBtn.innerText = "Pause";
+            playBtn.style.backgroundColor = "#f38ba8";
+
+            const fps = parseInt(fpsInput.value) || 24;
+            animTimer = setInterval(() => {
+                currentFrameIndex = (currentFrameIndex + 1) % animationGroups[currentAnimName].length;
+                updateActiveFrameUI();
+            }, 1000 / fps);
+        }
+
+        function pauseAnimation() {
+            isPlaying = false;
+            playBtn.innerText = "Play";
+            playBtn.style.backgroundColor = "var(--accent-color)";
+            if (animTimer) clearInterval(animTimer);
+        }
+
+        animSelect.onchange = (e) => {
+            pauseAnimation();
+            switchAnimation(e.target.value);
+        };
+
+        // Drawing Event Listeners
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseleave', stopDrawing);
+
+        function startDrawing(e) {
+            pauseAnimation();
+            isDrawing = true;
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+
+            lastX = (e.clientX - rect.left) * scaleX;
+            lastY = (e.clientY - rect.top) * scaleY;
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+
+            const curX = (e.clientX - rect.left) * scaleX;
+            const curY = (e.clientY - rect.top) * scaleY;
+
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(curX, curY);
+
+            if (toolSelect.value === 'eraser') {
+                ctx.globalCompositeOperation = 'destination-out';
+            } else {
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.strokeStyle = colorPicker.value;
+            }
+
+            ctx.lineWidth = sizePicker.value;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.stroke();
+
+            lastX = curX;
+            lastY = curY;
+
+            syncCanvasToFrame();
+        }
+
+        function stopDrawing() {
+            if (isDrawing) {
+                isDrawing = false;
+                syncCanvasToFrame();
+            }
+        }
+
+        clearFrameBtn.onclick = () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            syncCanvasToFrame();
+        };
+
+        // RE-PACK SPRITE SHEET & GENERATE NEW SPARROW XML
+        generateBtn.onclick = async () => {
+            generateBtn.innerText = "Packing Sheet...";
+            generateBtn.disabled = true;
+
+            // Simple row-based grid packing calculation
+            let totalWidth = 0;
+            let maxHeightInRow = 0;
+            let currentX = 0;
+            let currentY = 0;
+
+            const maxSheetWidth = 2048; // Standard texture atlas limit
+
+            // Calculate sheet layout positions for each frame
+            const packedFrames = [];
+            
+            allFramesList.forEach(frame => {
+                if (currentX + frame.w > maxSheetWidth) {
+                    currentX = 0;
+                    currentY += maxHeightInRow;
+                    maxHeightInRow = 0;
+                }
+
+                packedFrames.push({
+                    frame: frame,
+                    x: currentX,
+                    y: currentY,
+                    w: frame.w,
+                    h: frame.h
+                });
+
+                currentX += frame.w;
+                if (frame.h > maxHeightInRow) {
+                    maxHeightInRow = frame.h;
+                }
+            });
+
+            totalWidth = Math.min(maxSheetWidth, Math.max(...packedFrames.map(f => f.x + f.w)));
+            const totalHeight = currentY + maxHeightInRow;
+
+            // Build Master PNG Canvas
+            const masterCanvas = document.createElement('canvas');
+            masterCanvas.width = totalWidth;
+            masterCanvas.height = totalHeight;
+            const mCtx = masterCanvas.getContext('2d');
+
+            // Build XML String
+            let xmlContent = `<TextureAtlas imagePath="${originalImageName}_edited.png">\n`;
+
+            packedFrames.forEach(pf => {
+                mCtx.drawImage(pf.frame.canvas, pf.x, pf.y);
+
+                // Re-construct Sparrow XML tag
+                xmlContent += `\t<SubTexture name="${pf.frame.rawName}" x="${pf.x}" y="${pf.y}" width="${pf.w}" height="${pf.h}" frameX="-${pf.frame.frameX}" frameY="-${pf.frame.frameY}" frameWidth="${pf.frame.w}" frameHeight="${pf.frame.h}"/>\n`;
+            });
+
+            xmlContent += `</TextureAtlas>`;
+
+            // Package into a ZIP containing both the new PNG and new XML
+            const zip = new JSZip();
+            
+            const masterPngData = masterCanvas.toDataURL("image/png").split(',')[1];
+            zip.file(`${originalImageName}_edited.png`, masterPngData, { base64: true });
+            zip.file(`${originalImageName}_edited.xml`, xmlContent);
+
+            const blob = await zip.generateAsync({ type: "blob" });
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = `${originalImageName}_NewSpriteSheet.zip`;
+            a.click();
+
+            generateBtn.innerText = "Export New Sheet & XML 🚀";
+            generateBtn.disabled = false;
+        };
+
+        // Export Raw Frames ZIP
+        downloadZipBtn.onclick = async () => {
+            downloadZipBtn.innerText = "Packing ZIP...";
+            downloadZipBtn.disabled = true;
+
+            const zip = new JSZip();
+
+            Object.keys(animationGroups).forEach(animKey => {
+                const folder = zip.folder(animKey);
+                animationGroups[animKey].forEach((frame, idx) => {
+                    const dataURL = frame.canvas.toDataURL("image/png");
+                    const base64Data = dataURL.split(',')[1];
+                    folder.file(`${frame.rawName}_${idx}.png`, base64Data, { base64: true });
+                });
+            });
+
+            const blob = await zip.generateAsync({ type: "blob" });
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = "Edited_Animation_Frames.zip";
+            a.click();
+
+            downloadZipBtn.innerText = "ZIP Frames";
+            downloadZipBtn.disabled = false;
+        };
+    </script>
+</body>
+</html>
